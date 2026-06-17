@@ -1,0 +1,382 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Barcode Tool</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: #f0f2f5;
+      color: #1a1a2e;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 24px 16px;
+    }
+
+    h1 {
+      font-size: 1.4rem;
+      font-weight: 600;
+      margin-bottom: 20px;
+      letter-spacing: -0.3px;
+    }
+
+    .container {
+      width: 100%;
+      max-width: 1100px;
+      display: grid;
+      grid-template-columns: 200px 1fr 180px;
+      gap: 16px;
+      align-items: start;
+    }
+
+    /* ── Sidebar ── */
+    .sidebar {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .card {
+      background: #fff;
+      border-radius: 10px;
+      padding: 14px 16px;
+      box-shadow: 0 1px 3px rgba(0,0,0,.08);
+    }
+
+    .card h2 {
+      font-size: 0.7rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: .06em;
+      color: #888;
+      margin-bottom: 10px;
+    }
+
+    .btn {
+      display: block;
+      width: 100%;
+      padding: 8px 12px;
+      margin-bottom: 6px;
+      border: none;
+      border-radius: 6px;
+      font-size: 0.85rem;
+      font-weight: 500;
+      cursor: pointer;
+      text-align: left;
+      transition: background .15s, transform .1s;
+    }
+    .btn:last-child { margin-bottom: 0; }
+    .btn:active { transform: scale(.98); }
+
+    .btn-default  { background: #f0f2f5; color: #333; }
+    .btn-default:hover { background: #e4e7ec; }
+
+    .btn-primary  { background: #4f6ef7; color: #fff; }
+    .btn-primary:hover { background: #3d5ce5; }
+
+    .btn-danger   { background: #fff0f0; color: #c0392b; }
+    .btn-danger:hover { background: #fde0e0; }
+
+    .btn-success  { background: #edfaf3; color: #1a7a47; }
+    .btn-success:hover { background: #d6f5e7; }
+
+    /* suffix / prefix rows */
+    .suffix-row {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      margin-top: 8px;
+    }
+    .suffix-row input {
+      width: 100%;
+      border: 1px solid #ddd;
+      border-radius: 6px;
+      padding: 6px 8px;
+      font-size: 0.82rem;
+      font-family: monospace;
+      outline: none;
+      min-width: 0;
+    }
+    .suffix-row input:focus { border-color: #4f6ef7; }
+    .suffix-row .btn { width: 100%; margin: 0; padding: 6px 10px; text-align: center; }
+
+    /* stats */
+    .stats { font-size: 0.8rem; color: #666; line-height: 1.7; }
+    .stats span { font-weight: 600; color: #333; }
+
+    /* ── Main editor ── */
+    .editor-wrapper {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    textarea {
+      width: 100%;
+      height: 480px;
+      resize: vertical;
+      border: 2px solid #e0e3ea;
+      border-radius: 10px;
+      padding: 14px;
+      font-family: "Consolas", "Menlo", monospace;
+      font-size: 0.9rem;
+      line-height: 1.6;
+      outline: none;
+      background: #fff;
+      transition: border-color .2s;
+    }
+    textarea:focus { border-color: #4f6ef7; }
+    textarea.scanning { border-color: #27ae60; box-shadow: 0 0 0 3px rgba(39,174,96,.15); }
+
+    .scan-hint {
+      font-size: 0.78rem;
+      color: #aaa;
+      text-align: right;
+    }
+    .scan-hint.active { color: #27ae60; font-weight: 500; }
+
+    /* toast */
+    #toast {
+      position: fixed;
+      bottom: 28px;
+      left: 50%;
+      transform: translateX(-50%) translateY(20px);
+      background: #1a1a2e;
+      color: #fff;
+      padding: 9px 18px;
+      border-radius: 8px;
+      font-size: 0.82rem;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity .25s, transform .25s;
+      white-space: nowrap;
+    }
+    #toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+  </style>
+</head>
+<body>
+
+<h1>Barcode Tool</h1>
+
+<div class="container">
+
+  <!-- ── Sidebar ── -->
+  <div class="sidebar">
+
+    <div class="card">
+      <h2>Clean Up</h2>
+      <button class="btn btn-default" onclick="removeDuplicates()">Remove duplicates</button>
+      <button class="btn btn-default" onclick="removeBlankLines()">Remove blank lines</button>
+      <button class="btn btn-default" onclick="trimLines()">Trim whitespace</button>
+      <button class="btn btn-default" onclick="sortLines()">Sort A → Z</button>
+      <button class="btn btn-default" onclick="sortLines(true)">Sort Z → A</button>
+    </div>
+
+    <div class="card">
+      <h2>Case</h2>
+      <button class="btn btn-default" onclick="changeCase('upper')">UPPERCASE</button>
+      <button class="btn btn-default" onclick="changeCase('lower')">lowercase</button>
+      <button class="btn btn-default" onclick="changeCase('title')">Title Case</button>
+    </div>
+
+    <div class="card">
+      <h2>Suffix / Prefix</h2>
+      <button class="btn btn-default" onclick="addTrailingTab()">Add trailing tab</button>
+      <button class="btn btn-default" onclick="removeTrailingTab()">Remove trailing tab</button>
+      <div class="suffix-row">
+        <input id="customSuffix" type="text" placeholder="custom suffix" />
+        <button class="btn btn-default" onclick="addCustomSuffix()">Add</button>
+      </div>
+      <div class="suffix-row" style="margin-top:2px">
+        <input id="customPrefix" type="text" placeholder="custom prefix" />
+        <button class="btn btn-default" onclick="addCustomPrefix()">Add</button>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- ── Editor ── -->
+  <div class="editor-wrapper">
+    <textarea
+      id="editor"
+      placeholder="Paste barcodes here, or click to focus then scan with a barcode scanner — one barcode per line."
+      spellcheck="false"
+      autocomplete="off"
+      autocorrect="off"
+      autocapitalize="off"
+    ></textarea>
+    <div class="scan-hint" id="scanHint">Click the box, then scan a barcode</div>
+  </div>
+
+  <!-- ── Right sidebar ── -->
+  <div class="sidebar">
+
+    <div class="card">
+      <h2>Actions</h2>
+      <button class="btn btn-primary" onclick="copyAll()">Copy all</button>
+      <button class="btn btn-success" onclick="copyAsTSV()">Copy as TSV (tab-sep)</button>
+      <button class="btn btn-danger"  onclick="clearAll()">Clear</button>
+    </div>
+
+    <div class="card">
+      <h2>Stats</h2>
+      <div class="stats" id="stats">
+        Lines: <span id="statLines">0</span><br>
+        Non-blank: <span id="statNonBlank">0</span><br>
+        Unique: <span id="statUnique">0</span><br>
+        Duplicates: <span id="statDupes">0</span>
+      </div>
+    </div>
+
+  </div>
+
+</div>
+
+<div id="toast"></div>
+
+<script>
+  const editor = document.getElementById('editor');
+  const scanHint = document.getElementById('scanHint');
+
+  // ── Stats ──────────────────────────────────────────────
+  function updateStats() {
+    const lines = getLines();
+    const nonBlank = lines.filter(l => l.trim() !== '');
+    const unique = new Set(nonBlank.map(l => l.trim().toLowerCase()));
+    document.getElementById('statLines').textContent    = lines.length;
+    document.getElementById('statNonBlank').textContent = nonBlank.length;
+    document.getElementById('statUnique').textContent   = unique.size;
+    document.getElementById('statDupes').textContent    = nonBlank.length - unique.size;
+  }
+
+  editor.addEventListener('input', updateStats);
+
+  // ── Focus indicator for scanner ────────────────────────
+  editor.addEventListener('focus', () => {
+    editor.classList.add('scanning');
+    scanHint.classList.add('active');
+    scanHint.textContent = 'Ready to scan';
+  });
+  editor.addEventListener('blur', () => {
+    editor.classList.remove('scanning');
+    scanHint.classList.remove('active');
+    scanHint.textContent = 'Click the box, then scan a barcode';
+  });
+
+  // ── Helpers ────────────────────────────────────────────
+  function getLines() {
+    return editor.value.split('\n');
+  }
+
+  function setLines(lines) {
+    editor.value = lines.join('\n');
+    updateStats();
+  }
+
+  function toast(msg) {
+    const t = document.getElementById('toast');
+    t.textContent = msg;
+    t.classList.add('show');
+    clearTimeout(t._timer);
+    t._timer = setTimeout(() => t.classList.remove('show'), 2200);
+  }
+
+  // ── Operations ─────────────────────────────────────────
+  function removeDuplicates() {
+    const seen = new Set();
+    const result = getLines().filter(line => {
+      const key = line.trim().toLowerCase();
+      if (key === '') return true; // keep blank lines as-is
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+    const removed = getLines().length - result.length;
+    setLines(result);
+    toast(`Removed ${removed} duplicate${removed !== 1 ? 's' : ''}`);
+  }
+
+  function removeBlankLines() {
+    const before = getLines().length;
+    setLines(getLines().filter(l => l.trim() !== ''));
+    toast(`Removed ${before - getLines().length} blank line${(before - getLines().length) !== 1 ? 's' : ''}`);
+  }
+
+  function trimLines() {
+    setLines(getLines().map(l => l.trim()));
+    toast('Trimmed whitespace');
+  }
+
+  function sortLines(desc = false) {
+    const blanks = getLines().filter(l => l.trim() === '');
+    const nonBlanks = getLines().filter(l => l.trim() !== '');
+    nonBlanks.sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }));
+    if (desc) nonBlanks.reverse();
+    setLines([...nonBlanks, ...blanks]);
+    toast(`Sorted ${desc ? 'Z → A' : 'A → Z'}`);
+  }
+
+  function changeCase(type) {
+    setLines(getLines().map(l => {
+      if (type === 'upper') return l.toUpperCase();
+      if (type === 'lower') return l.toLowerCase();
+      if (type === 'title') return l.replace(/\S+/g, w => w[0].toUpperCase() + w.slice(1).toLowerCase());
+    }));
+    toast(`Changed to ${type} case`);
+  }
+
+  function addTrailingTab() {
+    setLines(getLines().map(l => l.trim() === '' ? l : l + '\t'));
+    toast('Added trailing tab');
+  }
+
+  function removeTrailingTab() {
+    setLines(getLines().map(l => l.endsWith('\t') ? l.slice(0, -1) : l));
+    toast('Removed trailing tab');
+  }
+
+  function addCustomSuffix() {
+    const s = document.getElementById('customSuffix').value;
+    if (!s) return;
+    setLines(getLines().map(l => l.trim() === '' ? l : l + s));
+    toast(`Added suffix "${s}"`);
+  }
+
+  function addCustomPrefix() {
+    const p = document.getElementById('customPrefix').value;
+    if (!p) return;
+    setLines(getLines().map(l => l.trim() === '' ? l : p + l));
+    toast(`Added prefix "${p}"`);
+  }
+
+  function copyAll() {
+    navigator.clipboard.writeText(editor.value).then(() => toast('Copied to clipboard'));
+  }
+
+  function copyAsTSV() {
+    const tsv = getLines()
+      .filter(l => l.trim() !== '')
+      .map(l => l.trim())
+      .join('\t');
+    navigator.clipboard.writeText(tsv).then(() => toast('Copied as tab-separated'));
+  }
+
+  function clearAll() {
+    if (editor.value === '') return;
+    if (confirm('Clear everything?')) {
+      editor.value = '';
+      updateStats();
+      toast('Cleared');
+    }
+  }
+
+  // init
+  updateStats();
+</script>
+</body>
+</html>
